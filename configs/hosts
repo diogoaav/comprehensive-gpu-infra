@@ -1,0 +1,5 @@
+# Private network configuration
+10.10.10.3 slurm-cluster-master
+10.10.10.2 compute-1
+10.10.10.5 compute-2
+10.10.10.4 compute-3 
