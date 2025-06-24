@@ -49,3 +49,4 @@ var/
 ehthumbs.db
 Thumbs.db
 juicefs-secret.yaml
+.env
