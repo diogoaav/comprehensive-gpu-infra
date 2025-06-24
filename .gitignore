@@ -48,3 +48,4 @@ var/
 .Trashes
 ehthumbs.db
 Thumbs.db
+juicefs-secret.yaml
