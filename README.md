@@ -29,86 +29,35 @@ This project demonstrates how to set up JuiceFS shared storage backed by Digital
 
 ### 3. Set Up Environment Variables
 
-Create a `.env` file with your credentials:
+Create a `.env` file with your credentials (see `.env.example` for the required format).
 
-```bash
-# DigitalOcean Spaces Configuration
-DO_SPACES_ACCESS_KEY=your_spaces_access_key
-DO_SPACES_SECRET_KEY=your_spaces_secret_key
-DO_SPACES_ENDPOINT=your_spaces_endpoint (e.g., nyc3.digitaloceanspaces.com)
-DO_SPACES_BUCKET=your_bucket_name
+### 4. Set Up Kubernetes Cluster
 
-# Redis Configuration
-REDIS_URL=your_redis_connection_string
-```
+1. Create a Kubernetes cluster with CPU nodes using `setup_cluster.sh`
+2. Get the kubeconfig using `doctl kubernetes cluster kubeconfig save training-cluster`
 
-### 4. Set Up Ubuntu Droplet
+### 5. Install JuiceFS CSI Driver in Kubernetes
 
-1. Create a new Ubuntu droplet from the DigitalOcean control panel
-2. SSH into your droplet
-3. Install required dependencies:
-```bash
-sudo apt-get update
-sudo apt-get install -y python3-pip fuse
-```
+Install the JuiceFS CSI driver using Helm as described in the `install_juicefs_csi.sh` script.
 
-### 5. Install and Configure JuiceFS
+### 6. Create JuiceFS Storage Class and PVC
 
-1. Download and install JuiceFS:
-```bash
-curl -L https://juicefs.com/static/juicefs -o juicefs
-chmod +x juicefs
-sudo mv juicefs /usr/local/bin
-```
+Apply the `juicefs-storage.yaml` configuration to create the storage class and persistent volume claim.
 
-2. Format the JuiceFS filesystem:
-```bash
-source .env
-juicefs format \
-    --storage s3 \
-    --bucket ${DO_SPACES_ENDPOINT}/${DO_SPACES_BUCKET} \
-    --access-key ${DO_SPACES_ACCESS_KEY} \
-    --secret-key ${DO_SPACES_SECRET_KEY} \
-    "${REDIS_URL}" \
-    myjfs
-```
+### 7. Load OpenWebText Dataset
 
-3. Mount the filesystem:
-```bash
-sudo juicefs mount -d \
-    --cache-dir /var/jfsCache \
-    --cache-size 102400 \
-    "${REDIS_URL}" \
-    /mnt/jfs
-```
+Apply the `load-openwebtext.yaml` job to download and save the OpenWebText dataset to the JuiceFS volume.
 
-### 6. Load OpenWebText Dataset
+### 8. Tokenize the Dataset
 
-1. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
+Apply the `tokenize-openwebtext.yaml` job to tokenize the dataset in parallel across multiple pods.
 
-2. Load the dataset:
-```bash
-python load_openwebtext.py --output-dir /mnt/jfs/datasets/openwebtext
-```
+### 9. Verify the Tokenized Dataset
+
+Create a pod to check the tokenized files using the `check-tokenized.yaml` configuration.
 
 ## Dataset Structure
 
-After loading, your dataset will be organized as:
+After tokenization, the dataset will be organized as:
 
 ```
-/mnt/jfs/
-└── datasets/
-    └── openwebtext/
-        ├── 0/
-        │   ├── 0
-        │   ├── 1
-        │   └── ...
-        ├── 1/
-        └── ...
-```
-
-- Each subdirectory (`0`, `1`, ...) contains a portion of the dataset
-- Files are named with numeric IDs

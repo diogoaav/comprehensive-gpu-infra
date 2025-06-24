@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-openwebtext
+spec:
+  template:
+    spec:
+      containers:
+      - name: loader
+        image: python:3.9-slim
+        resources:
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+          limits:
+            cpu: "6"
+            memory: "12Gi"
+        volumeMounts:
+        - name: juicefs-volume
+          mountPath: /mnt/jfs
+        command:
+        - "bash"
+        - "-c"
+        - |
+          apt-get update && apt-get install -y git
+          pip install datasets
+          python -c '
+          from datasets import load_dataset
+          print("Loading OpenWebText dataset...")
+          dataset = load_dataset("openwebtext", split="train", trust_remote_code=True)
+          print("Saving dataset...")
+          dataset.save_to_disk("/mnt/jfs/datasets/openwebtext")
+          print("Dataset loading complete!")
+          '
+      volumes:
+      - name: juicefs-volume
+        persistentVolumeClaim:
+          claimName: juicefs-pvc
+      restartPolicy: Never 

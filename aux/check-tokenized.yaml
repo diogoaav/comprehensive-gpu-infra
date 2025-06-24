@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-tokenized
+spec:
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["sleep", "3600"]
+    volumeMounts:
+    - name: juicefs-volume
+      mountPath: "/mnt/jfs"
+  volumes:
+  - name: juicefs-volume
+    persistentVolumeClaim:
+      claimName: juicefs-pvc 

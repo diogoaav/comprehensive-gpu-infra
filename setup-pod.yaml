@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: setup-pod
+spec:
+  containers:
+  - name: setup
+    image: python:3.9-slim
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: juicefs-volume
+      mountPath: /mnt/jfs
+  volumes:
+  - name: juicefs-volume
+    persistentVolumeClaim:
+      claimName: juicefs-pvc 

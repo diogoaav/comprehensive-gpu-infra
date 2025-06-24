@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: check-dataset
+spec:
+  containers:
+  - name: checker
+    image: python:3.9-slim
+    resources:
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+    volumeMounts:
+    - name: juicefs-volume
+      mountPath: /mnt/jfs
+    command:
+    - "bash"
+    - "-c"
+    - |
+      apt-get update && apt-get install -y git
+      pip install datasets
+      
+      echo "Checking dataset..."
+      python -c "
+      from datasets import load_from_disk
+      import os
+      
+      print('Checking mount point...')
+      print(os.listdir('/mnt/jfs'))
+      
+      print('Checking datasets directory...')
+      print(os.listdir('/mnt/jfs/datasets'))
+      
+      print('Loading a small part of the dataset...')
+      dataset = load_from_disk('/mnt/jfs/datasets/openwebtext')
+      print(f'Dataset has {len(dataset)} examples')
+      print('First example:', dataset[0])
+      "
+  volumes:
+  - name: juicefs-volume
+    persistentVolumeClaim:
+      claimName: juicefs-pvc
+  restartPolicy: Never 

@@ -1,0 +1,143 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tokenize-openwebtext
+spec:
+  parallelism: 3
+  completions: 3
+  backoffLimit: 10
+  template:
+    spec:
+      containers:
+      - name: tokenizer
+        image: python:3.9-slim
+        resources:
+          requests:
+            cpu: "10"
+            memory: "20Gi"
+          limits:
+            cpu: "14"
+            memory: "24Gi"
+        volumeMounts:
+        - name: juicefs-volume
+          mountPath: /mnt/jfs
+        command:
+        - "bash"
+        - "-c"
+        - |
+          apt-get update && apt-get install -y git
+          pip install torch transformers datasets
+          
+          # Generate a random worker ID (0, 1, or 2)
+          WORKER_ID=$((RANDOM % 3))
+          echo "Using worker ID: $WORKER_ID"
+          
+          python -c "
+          import os
+          import sys
+          import time
+          import gc
+          import numpy as np
+          from datasets import load_from_disk
+          from transformers import AutoTokenizer
+          
+          # Get worker ID from environment
+          worker_id = int(os.environ.get('WORKER_ID', 0))
+          
+          # Calculate shard range for this pod
+          total_shards = 80
+          shards_per_pod = total_shards // 3
+          start_shard = worker_id * shards_per_pod
+          end_shard = start_shard + shards_per_pod if worker_id < 2 else total_shards
+          
+          print(f'Worker {worker_id} processing shards {start_shard} to {end_shard-1}')
+          
+          # Load tokenizer and set padding token
+          print('Loading tokenizer...')
+          tokenizer = AutoTokenizer.from_pretrained('gpt2')
+          tokenizer.pad_token = tokenizer.eos_token  # Use EOS as padding token
+          print('Tokenizer loaded successfully')
+          
+          # Load dataset
+          print('Loading dataset from disk...')
+          dataset = load_from_disk('/mnt/jfs/datasets/openwebtext')
+          print(f'Dataset loaded successfully with {len(dataset)} examples')
+          
+          shard_size = len(dataset) // total_shards
+          print(f'Each shard will have approximately {shard_size} examples')
+          
+          # Process in smaller batches to reduce memory usage
+          batch_size = 1000  # Process 1000 examples at a time
+          
+          for shard_idx in range(start_shard, end_shard):
+              print(f'Processing shard {shard_idx}')
+              start_idx = shard_idx * shard_size
+              end_idx = start_idx + shard_size if shard_idx < total_shards-1 else len(dataset)
+              
+              # Create output directory
+              output_dir = '/mnt/jfs/datasets/openwebtext_tokenized'
+              os.makedirs(output_dir, exist_ok=True)
+              output_path = f'{output_dir}/shard_{shard_idx:05d}.npz'
+              
+              # Skip if already processed
+              if os.path.exists(output_path):
+                  print(f'Shard {shard_idx} already exists, skipping')
+                  continue
+              
+              # Process in batches
+              all_input_ids = []
+              all_attention_masks = []
+              
+              for batch_start in range(start_idx, end_idx, batch_size):
+                  batch_end = min(batch_start + batch_size, end_idx)
+                  print(f'Processing batch {batch_start}-{batch_end-1}')
+                  
+                  # Get batch data
+                  batch_data = dataset[batch_start:batch_end]
+                  
+                  # Tokenize
+                  tokenized = tokenizer(
+                      batch_data['text'],
+                      truncation=True,
+                      padding='max_length',
+                      max_length=512,
+                      return_tensors='np'
+                  )
+                  
+                  # Append results
+                  all_input_ids.append(tokenized['input_ids'])
+                  all_attention_masks.append(tokenized['attention_mask'])
+                  
+                  # Force garbage collection
+                  del tokenized
+                  gc.collect()
+              
+              # Combine all batches
+              print(f'Combining batches for shard {shard_idx}')
+              combined_input_ids = np.concatenate(all_input_ids)
+              combined_attention_masks = np.concatenate(all_attention_masks)
+              
+              # Save tokenized data
+              print(f'Saving shard {shard_idx}')
+              np.savez(
+                  output_path,
+                  input_ids=combined_input_ids,
+                  attention_mask=combined_attention_masks
+              )
+              
+              # Clean up
+              del all_input_ids, all_attention_masks, combined_input_ids, combined_attention_masks
+              gc.collect()
+              
+              print(f'Completed shard {shard_idx}')
+          
+          print(f'Worker {worker_id} completed all assigned shards')
+          "
+        env:
+        - name: WORKER_ID
+          value: "$(WORKER_ID)"
+      volumes:
+      - name: juicefs-volume
+        persistentVolumeClaim:
+          claimName: juicefs-pvc
+      restartPolicy: Never 

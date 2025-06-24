@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+spec:
+  containers:
+  - name: test
+    image: python:3.9-slim
+    command: ["ls", "-la", "/mnt/jfs/datasets"]
+    volumeMounts:
+    - name: juicefs-volume
+      mountPath: /mnt/jfs
+  volumes:
+  - name: juicefs-volume
+    persistentVolumeClaim:
+      claimName: juicefs-pvc
+  restartPolicy: Never 

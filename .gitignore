@@ -1,0 +1,50 @@
+# Environment variables and credentials
+.env
+.env.*
+*.pem
+*.key
+*_key
+*_secret
+
+# JuiceFS cache and logs
+juicefs-cache/
+juicefs-logs/
+
+# Large data files
+*.npz
+*.arrow
+
+# Kubernetes and local config
+kubeconfig
+.kube/
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

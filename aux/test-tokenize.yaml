@@ -1,0 +1,86 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-tokenize
+spec:
+  template:
+    spec:
+      containers:
+      - name: tokenizer
+        image: python:3.9-slim
+        resources:
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+          limits:
+            cpu: "6"
+            memory: "12Gi"
+        volumeMounts:
+        - name: juicefs-volume
+          mountPath: /mnt/jfs
+        command:
+        - "bash"
+        - "-c"
+        - |
+          apt-get update && apt-get install -y git
+          pip install torch transformers datasets
+          
+          python -c '
+          import os
+          import sys
+          import time
+          import numpy as np
+          from datasets import load_from_disk
+          from transformers import AutoTokenizer
+          
+          # Simple logging
+          def log(msg):
+              print(f"[{time.strftime(\"%Y-%m-%d %H:%M:%S\")}] {msg}")
+              sys.stdout.flush()
+          
+          # Load tokenizer
+          log("Loading tokenizer...")
+          tokenizer = AutoTokenizer.from_pretrained("gpt2")
+          tokenizer.pad_token = tokenizer.eos_token
+          log("Tokenizer loaded")
+          
+          # Load just a small part of the dataset as a test
+          log("Loading dataset...")
+          try:
+              dataset = load_from_disk("/mnt/jfs/datasets/openwebtext")
+              log(f"Dataset loaded with {len(dataset)} examples")
+              
+              # Just process 1000 examples as a test
+              log("Processing 1000 examples...")
+              sample = dataset[:1000]
+              
+              # Tokenize
+              log("Tokenizing...")
+              tokenized = tokenizer(
+                  sample["text"],
+                  truncation=True,
+                  padding="max_length",
+                  max_length=512,
+                  return_tensors="np"
+              )
+              
+              # Save
+              log("Saving...")
+              output_dir = "/mnt/jfs/datasets/openwebtext_tokenized"
+              os.makedirs(output_dir, exist_ok=True)
+              np.savez(
+                  f"{output_dir}/test_sample.npz",
+                  input_ids=tokenized["input_ids"],
+                  attention_mask=tokenized["attention_mask"]
+              )
+              log("Done!")
+              
+          except Exception as e:
+              log(f"Error: {e}")
+              raise
+          '
+      volumes:
+      - name: juicefs-volume
+        persistentVolumeClaim:
+          claimName: juicefs-pvc
+      restartPolicy: Never 
